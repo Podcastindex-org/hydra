@@ -5,6 +5,7 @@ use rusqlite::{ Connection };
 use reqwest::header;
 
 //##: Global definitions
+static USERAGENT: &str = "Hydra (PodcastIndex)/v0.1";
 struct Podcast {
     id: u64,
     url: String,
@@ -22,7 +23,8 @@ impl fmt::Display for HydraError {
 impl Error for HydraError {}
 
 
-//##: Entry point
+//##: -------------------- Main() -----------------------
+//##: ---------------------------------------------------
 fn main() {
     //Globals
     //let pi_database_url: &str = "https://cloudflare-ipfs.com/ipns/k51qzi5uqu5dkde1r01kchnaieukg7xy9i6eu78kk3mm3vaa690oaotk1px6wo/podcastindex_feeds.db.tgz";
@@ -34,12 +36,14 @@ fn main() {
         Ok(podcasts) => {
             for podcast in podcasts {
                 println!("{:#?}|{:#?}|{:#?}", podcast.id, podcast.url, podcast.title);
-                fetch_feed(podcast.url.as_str());
+                check_feed_is_updated(podcast.url.as_str());
             }
         },
         Err(e) => println!("{}", e),
     }
 }
+//##: ---------------------------------------------------
+
 
 
 //##: Get a list of podcasts from the downloaded sqlite db
@@ -100,7 +104,7 @@ fn fetch_feed(url: &str) -> Result<bool, Box<dyn Error>> {
 
     //##: Build the query with the required headers
     let mut headers = header::HeaderMap::new();
-    headers.insert("User-Agent", header::HeaderValue::from_static("Hydra (PodcastIndex)/v0.1"));
+    headers.insert("User-Agent", header::HeaderValue::from_static(USERAGENT));
     let client = reqwest::blocking::Client::builder().default_headers(headers).build().unwrap();
 
     //##: Send the request and display the results or the error
@@ -120,6 +124,32 @@ fn fetch_feed(url: &str) -> Result<bool, Box<dyn Error>> {
 }
 
 
+//##: Do a head check on a url to see if it's been modified
+fn check_feed_is_updated(url: &str) -> Result<bool, Box<dyn Error>> {
+
+    //##: Build the query with the required headers
+    let mut headers = header::HeaderMap::new();
+    headers.insert("User-Agent", header::HeaderValue::from_static(USERAGENT));
+    //headers.insert("Last-Modified", header::HeaderValue::from_static());
+    let client = reqwest::blocking::Client::builder().default_headers(headers).build().unwrap();
+
+    //##: Send the request and display the results or the error
+    let res = client.get(url).send();
+    match res {
+        Ok(res) => {
+            println!("Response Status: [{}]", res.status());
+            for h in res.headers().into_iter() {
+                println!("Response Headers: {:?}", h);
+            }
+
+            return Ok(true);
+        },
+        Err(e) => {
+            eprintln!("Error: [{}]", e);
+            return Err(Box::new(HydraError(format!("Error running SQL query: [{}]", e).into())));
+        }
+    }
+}
 
 
 
